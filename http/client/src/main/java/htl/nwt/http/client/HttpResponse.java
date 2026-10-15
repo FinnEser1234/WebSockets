@@ -44,14 +44,11 @@ public class HttpResponse {
         }
 
         headers = headerList.toArray(new String[0]);
-
         int contentLength = getContentLength(headers);
-        if (contentLength < 0) {
-            body = readBody(in, contentLength);
-        } else {
-            body = new byte[0];
-        }
+
+        body = readBody(in, contentLength);
     }
+
 
     private byte[] readBody(InputStream in, int contentLength) throws IOException {
         byte[] bodyData = new byte[contentLength];
