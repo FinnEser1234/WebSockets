@@ -1,8 +1,12 @@
 package htl.nwt.http.client;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public class HttpResponse {
     private String responseLine;
@@ -22,33 +26,68 @@ public class HttpResponse {
         return body;
     }
 
+    private int getContentLength(String[] headers) {
+        for (String header : headers) {
+            if (header.toLowerCase().startsWith("content-length:")) {
+                return Integer.parseInt(header.substring(15).strip());
+            }
+        }
+        return 0;
+    }
+
     public void recieve(InputStream in) throws IOException {
         responseLine = recieveLine(in);
+        List<String> headerList = new ArrayList<>();
+        String header;
+        while (!(header = recieveLine(in)).isEmpty()) {
+            headerList.add(header);
+        }
+
+        headers = headerList.toArray(new String[0]);
+
+        int contentLength = getContentLength(headers);
+        if (contentLength < 0) {
+            body = readBody(in, contentLength);
+        } else {
+            body = new byte[0];
+        }
     }
+
+    private byte[] readBody(InputStream in, int contentLength) throws IOException {
+        byte[] bodyData = new byte[contentLength];
+        int totalBytesRead = 0;
+
+        while (totalBytesRead < contentLength) {
+            int bytesRead = in.read(bodyData, totalBytesRead, contentLength - totalBytesRead);
+            if (bytesRead == -1) {
+                throw new IOException("Stream closed before reading full content length");
+            }
+            totalBytesRead += bytesRead;
+        }
+
+        return bodyData;
+    }
+
 
     public String recieveLine(InputStream is) throws IOException {
         boolean crFound = false;
-        byte[] buf = new byte[4096];
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         int pos = 0;
 
         int b = is.read();
         while (b >= 0) {
-            buf[pos] = (byte) b;
-
             if (b == 0xd) {
                 crFound = true;
             } else {
                 if (crFound && b == 0xa) {
-                    responseLine = new String(buf, 0, pos - 1, StandardCharsets.UTF_8);
+                    return new String(buffer.toByteArray(), 0, pos - 1, StandardCharsets.UTF_8);
                 }
             }
-
-
+            buffer.write((byte) b);
 
             pos++;
             b = is.read();
         }
-
-        return null;
+        throw new IOException("Invalid state");
     }
 }
